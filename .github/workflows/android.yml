@@ -1,0 +1,37 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Unzip project
+        run: unzip -q "AgendaBienestarProyecto.zip" -d src
+
+      - name: Set permissions
+        run: |
+          cd src
+          chmod +x gradlew
+
+      - name: Build APK
+        run: |
+          cd src
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: src/app/build/outputs/apk/debug/*.apk
