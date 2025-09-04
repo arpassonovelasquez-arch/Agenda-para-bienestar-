@@ -17,21 +17,14 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Unzip project
-        run: unzip -q "AgendaBienestarProyecto.zip" -d src
-
-      - name: Set permissions
-        run: |
-          cd src
-          chmod +x gradlew
-
       - name: Build APK
         run: |
-          cd src
+          cd app
+          chmod +x ./gradlew
           ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: src/app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/debug/*.apk
