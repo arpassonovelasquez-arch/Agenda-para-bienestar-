@@ -3,16 +3,17 @@ name: Build Android APK
 on:
   workflow_dispatch:
 
+env:
+  PROJECT_DIR: AgendaBienestarProyecto     # <-- carpeta donde está tu proyecto Android
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
-    env:
-      # Ajusta estas variables si hace falta
-      MODULE: app                # nombre del módulo Android (por defecto "app")
-      API_LEVEL: 34              # nivel de API a compilar
-      BUILD_TOOLS: 34.0.0        # versión de build-tools
-      WORKDIR: .                 # carpeta del proyecto ('.' = raíz del repo)
+    # todos los "run:" se ejecutan dentro de la carpeta del proyecto
+    defaults:
+      run:
+        working-directory: ${{ env.PROJECT_DIR }}
 
     steps:
       - name: Checkout repository
@@ -22,59 +23,36 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: '17'
           cache: gradle
+          # MUY IMPORTANTE: dile dónde están los archivos de Gradle (subcarpeta)
+          cache-dependency-path: |
+            ${{ env.PROJECT_DIR }}/**/*.gradle*
+            ${{ env.PROJECT_DIR }}/**/gradle-wrapper.properties
+            ${{ env.PROJECT_DIR }}/gradle/libs.versions.toml
+            ${{ env.PROJECT_DIR }}/**/versions.properties
 
-      # Instala Android SDK estable (forzamos commandline-tools compatible)
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: 11076708
-
-      - name: Accept Android licenses
-        run: yes | sdkmanager --licenses
 
       - name: Install Android SDK components
         run: |
-          sdkmanager "platforms;android-${API_LEVEL}" \
-                     "build-tools;${BUILD_TOOLS}" \
-                     "platform-tools"
+          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      # Prepara Gradle: usará el wrapper si existe; si no, usa 'gradle' del runner
+      # Usaremos Gradle SIN wrapper
       - name: Prepare Gradle
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-          fi
+        uses: gradle/actions/setup-gradle@v3
 
-      # Compila APK de debug (sin tests para hacerlo más rápido/estable)
-      - name: Build Debug APK
-        working-directory: ${{ env.WORKDIR }}
+      - name: Build Debug APK (no wrapper)
         run: |
-          set -e
-          if [ -f "./gradlew" ]; then
-            ./gradlew --no-daemon --stacktrace --warning-mode=all :${MODULE}:assembleDebug -x test
-          else
-            echo "No se encontró gradlew; usando 'gradle' del runner"
-            gradle --no-daemon --stacktrace --warning-mode=all :${MODULE}:assembleDebug -x test
-          fi
+          gradle -p . :app:assembleDebug --stacktrace --warning-mode all --no-daemon
 
-      # Ubica el APK generado y lo expone a los siguientes pasos
       - name: Find generated APK
         id: find_apk
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
         run: |
-          APK_PATH=$(ls ${MODULE}/build/outputs/apk/debug/*.apk | head -n 1 || true)
-          if [ -z "$APK_PATH" ]; then
-            echo "No se encontró el APK en ${MODULE}/build/outputs/apk/debug/"
-            exit 1
-          fi
-          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
-          echo "APK encontrado: $APK_PATH"
+          APK=$(ls -1 "${GITHUB_WORKSPACE}/${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/"*.apk | head -n 1)
+          echo "apk_path=$APK" >> "$GITHUB_OUTPUT"
 
-      # Sube el APK como artifact para descargarlo desde la UI de Actions
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
