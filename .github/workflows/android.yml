@@ -1,5 +1,4 @@
 name: Build Android APK
-
 on:
   workflow_dispatch:
 
@@ -17,7 +16,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Encuentra y descomprime el ZIP del proyecto (tome el más reciente)
+      # 1) Descomprimir el ZIP más reciente al folder src/
       - name: Unzip project
         run: |
           set -e
@@ -27,24 +26,34 @@ jobs:
           rm -rf src
           mkdir -p src
           unzip -q "$ZIP" -d src
-          echo "Contenido raíz descomprimido:"
+          echo "Root of src:"
           ls -la src
 
-      # Instala Gradle desde apt (evitamos usar gradle wrapper)
-      - name: Install Gradle
+      # 2) Instalar Gradle para poder GENERAR el wrapper
+      - name: Install Gradle (to generate wrapper)
         run: |
           sudo apt-get update -y
           sudo apt-get install -y gradle
           gradle --version
 
-      # Compila el módulo app en modo debug
-      - name: Build APK
+      # 3) Generar gradle wrapper dentro del runner
+      - name: Generate Gradle wrapper
         working-directory: src
         run: |
-          # Si tu proyecto tiene carpeta "app" dentro de src, esto compila:
-          gradle -p app assembleDebug
+          # Debe haber build.gradle y settings.gradle en src/
+          test -f build.gradle || (echo "No existe build.gradle en src/"; exit 1)
+          gradle wrapper
+          ls -la
+          ls -la gradle/wrapper || true
 
-      # Sube el APK como artefacto
+      # 4) Compilar con el wrapper recién generado
+      - name: Build APK (assembleDebug)
+        working-directory: src
+        run: |
+          chmod +x ./gradlew
+          ./gradlew -p app assembleDebug
+
+      # 5) Recopilar y publicar APKs
       - name: Collect APKs
         if: always()
         run: |
