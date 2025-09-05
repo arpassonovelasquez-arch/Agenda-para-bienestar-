@@ -7,6 +7,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Carpeta donde está el proyecto Android (la que contiene settings.gradle / app/)
+    defaults:
+      run:
+        working-directory: AgendaBienestarProyecto
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -19,12 +24,35 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            platforms;android-34
+            build-tools;34.0.0
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+      # Cache + Gradle provision (sin wrapper)
+      - name: Prepare Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      # (Opcional) Listar estructura por si hay dudas de rutas
+      - name: Debug – listar archivos importantes
+        run: |
+          pwd
+          ls -la
+          ls -la app || true
+
+      - name: Build Debug APK (sin wrapper)
+        run: gradle :app:assembleDebug --stacktrace --warning-mode=all --no-daemon
+
+      - name: Mostrar APK generado (debug)
+        run: |
+          echo "Buscando APK en app/build/outputs/apk/debug/"
+          ls -la app/build/outputs/apk/debug || true
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug.apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: app-debug-apk
+          path: AgendaBienestarProyecto/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
