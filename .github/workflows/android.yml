@@ -17,75 +17,45 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # ---------- Gradle (sin wrapper) ----------
-      - name: Install Gradle 8.7
+      # Encuentra y descomprime el ZIP del proyecto (tome el más reciente)
+      - name: Unzip project
         run: |
-          GRADLE_VERSION=8.7
-          wget -q https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip
-          sudo unzip -q gradle-${GRADLE_VERSION}-bin.zip -d /opt/gradle
-          echo "/opt/gradle/gradle-${GRADLE_VERSION}/bin" >> "$GITHUB_PATH"
+          set -e
+          ZIP="$(ls -1t *.zip | head -n 1)"
+          echo "ZIP file: $ZIP"
+          test -n "$ZIP"
+          rm -rf src
+          mkdir -p src
+          unzip -q "$ZIP" -d src
+          echo "Contenido raíz descomprimido:"
+          ls -la src
+
+      # Instala Gradle desde apt (evitamos usar gradle wrapper)
+      - name: Install Gradle
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y gradle
           gradle --version
 
-      # ---------- Android SDK mínimo ----------
-      - name: Install Android SDK (cmdline-tools, platform 34, build-tools 34.0.0)
+      # Compila el módulo app en modo debug
+      - name: Build APK
+        working-directory: src
         run: |
-          ANDROID_SDK_ROOT=/usr/local/android-sdk
-          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}" >> $GITHUB_ENV
-          sudo mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools"
-          cd "${ANDROID_SDK_ROOT}/cmdline-tools"
-          # Descargar cmdline-tools
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          sudo unzip -q commandlinetools-linux-11076708_latest.zip -d latest
-          echo "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "${ANDROID_SDK_ROOT}/platform-tools" >> $GITHUB_PATH
-          # Instalar paquetes
-          yes | "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --sdk_root=${ANDROID_SDK_ROOT} "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          yes | "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --sdk_root=${ANDROID_SDK_ROOT} --licenses
+          # Si tu proyecto tiene carpeta "app" dentro de src, esto compila:
+          gradle -p app assembleDebug
 
-      # ---------- Descomprimir tu proyecto ----------
-      - name: Unzip latest project ZIP to src/
-        run: |
-          mkdir -p src
-          # tomar el ZIP más reciente del repositorio
-          ZIP_FILE=$(ls -t *.zip | head -n 1)
-          if [ -z "$ZIP_FILE" ]; then
-            echo "No se encontró ningún .zip en el repositorio." >&2
-            exit 1
-          fi
-          echo "Usando ZIP: $ZIP_FILE"
-          unzip -q "$ZIP_FILE" -d src
-          # Mostrar árbol para verificar
-          echo "Contenido de src/"
-          ls -la src
-          echo "Árbol (2 niveles):"
-          find src -maxdepth 2 -type d -print
-
-      # ---------- Compilar APK con Gradle instalado ----------
-      - name: Build APK (assembleDebug)
-        run: |
-          cd src
-          # Si el ZIP desempaqueta la raíz del proyecto dentro de una carpeta, detectarla:
-          # Buscar settings.gradle en el primer nivel
-          ROOT_DIR=$(find . -maxdepth 2 -name "settings.gradle" -printf "%h\n" | head -n 1)
-          if [ -z "$ROOT_DIR" ]; then
-            echo "No se encontró settings.gradle dentro del ZIP. Verifica la estructura." >&2
-            exit 1
-          fi
-          echo "Proyecto detectado en: $ROOT_DIR"
-          cd "$ROOT_DIR"
-          gradle --no-daemon assembleDebug
-
-      # ---------- Recoger APK(s) ----------
+      # Sube el APK como artefacto
       - name: Collect APKs
-        if: success()
+        if: always()
         run: |
-          mkdir -p apks
-          find . -type f -name "*.apk" -exec cp {} apks/ \;
-          ls -la apks
+          mkdir -p apk_out
+          find src/app/build/outputs/apk -type f -name "*.apk" -print -exec cp {} apk_out/ \; || true
+          ls -la apk_out || true
 
       - name: Upload APK artifact
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: app-apks
-          path: apks/*.apk
+          path: apk_out/*
+          if-no-files-found: warn
