@@ -3,14 +3,13 @@ name: Build Android APK
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    # Carpeta donde está el proyecto Android (la que contiene settings.gradle / app/)
-    defaults:
-      run:
-        working-directory: AgendaBienestarProyecto
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -20,45 +19,67 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: "17"
 
-      - name: - name: Set up Android SDK
-  uses: android-actions/setup-android@v3
-  with:
-    cmdline-tools-version: latest
-- name: Accept Licenses
-  run: yes | sdkmanager --licenses
-
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
+          cmdline-tools-version: latest
           packages: |
-            platform-tools
             platforms;android-34
             build-tools;34.0.0
+            platform-tools
 
-      # Cache + Gradle provision (sin wrapper)
+      - name: Accept Android licenses
+        run: yes | sdkmanager --licenses
+
+      # Detecta el directorio del proyecto Android automáticamente
+      - name: Locate Android project dir
+        id: locate
+        shell: bash
+        run: |
+          set -e
+          root="$(pwd)"
+          cand="$(find "$root" -maxdepth 3 -type f \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \) -printf '%h\n' | head -n1)"
+          if [ -z "$cand" ]; then
+            cand="$(find "$root" -maxdepth 3 -type f -name 'build.gradle' -printf '%h\n' | head -n1)"
+          fi
+          echo "project_dir=${cand:-$root}" >> "$GITHUB_OUTPUT"
+          echo "Proyecto detectado en: ${cand:-$root}"
+
+      # Cache + provisión de Gradle (funciona con o sin wrapper)
       - name: Prepare Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # (Opcional) Listar estructura por si hay dudas de rutas
-      - name: Debug – listar archivos importantes
+      - name: Build Debug APK
+        shell: bash
+        working-directory: ${{ steps.locate.outputs.project_dir }}
         run: |
-          pwd
-          ls -la
-          ls -la app || true
+          set -euxo pipefail
+          if [ -x "./gradlew" ]; then
+            ./gradlew :app:assembleDebug --stacktrace --warning-mode=all --no-daemon
+          else
+            gradle :app:assembleDebug --stacktrace --warning-mode=all --no-daemon
+          fi
 
-      - name: Build Debug APK (sin wrapper)
-        run: gradle :app:assembleDebug --stacktrace --warning-mode=all --no-daemon
-
-      - name: Mostrar APK generado (debug)
+      - name: Find generated APK
+        id: apk
+        shell: bash
+        working-directory: ${{ steps.locate.outputs.project_dir }}
         run: |
-          echo "Buscando APK en app/build/outputs/apk/debug/"
-          ls -la app/build/outputs/apk/debug || true
+          set -e
+          file="$(find . -type f -path '*/app/build/outputs/apk/debug/*.apk' | head -n1 || true)"
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+          if [ -n "$file" ]; then
+            echo "APK: $file"
+          else
+            echo "No se encontró APK (aún)."
+          fi
 
       - name: Upload APK artifact
+        if: ${{ steps.apk.outputs.file != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
-          path: AgendaBienestarProyecto/app/build/outputs/apk/debug/*.apk
+          name: app-debug
+          path: ${{ steps.apk.outputs.file }}
           if-no-files-found: error
-          retention-days: 7
