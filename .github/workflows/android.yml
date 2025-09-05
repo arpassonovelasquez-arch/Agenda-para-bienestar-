@@ -3,13 +3,16 @@ name: Build Android APK
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+
+    env:
+      # Ajusta estas variables si hace falta
+      MODULE: app                # nombre del módulo Android (por defecto "app")
+      API_LEVEL: 34              # nivel de API a compilar
+      BUILD_TOOLS: 34.0.0        # versión de build-tools
+      WORKDIR: .                 # carpeta del proyecto ('.' = raíz del repo)
 
     steps:
       - name: Checkout repository
@@ -19,67 +22,62 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: 17
+          cache: gradle
 
+      # Instala Android SDK estable (forzamos commandline-tools compatible)
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          cmdline-tools-version: latest
-          packages: |
-            platforms;android-34
-            build-tools;34.0.0
-            platform-tools
+          cmdline-tools-version: 11076708
 
       - name: Accept Android licenses
         run: yes | sdkmanager --licenses
 
-      # Detecta el directorio del proyecto Android automáticamente
-      - name: Locate Android project dir
-        id: locate
-        shell: bash
+      - name: Install Android SDK components
         run: |
-          set -e
-          root="$(pwd)"
-          cand="$(find "$root" -maxdepth 3 -type f \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \) -printf '%h\n' | head -n1)"
-          if [ -z "$cand" ]; then
-            cand="$(find "$root" -maxdepth 3 -type f -name 'build.gradle' -printf '%h\n' | head -n1)"
-          fi
-          echo "project_dir=${cand:-$root}" >> "$GITHUB_OUTPUT"
-          echo "Proyecto detectado en: ${cand:-$root}"
+          sdkmanager "platforms;android-${API_LEVEL}" \
+                     "build-tools;${BUILD_TOOLS}" \
+                     "platform-tools"
 
-      # Cache + provisión de Gradle (funciona con o sin wrapper)
+      # Prepara Gradle: usará el wrapper si existe; si no, usa 'gradle' del runner
       - name: Prepare Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Build Debug APK
-        shell: bash
-        working-directory: ${{ steps.locate.outputs.project_dir }}
+        working-directory: ${{ env.WORKDIR }}
         run: |
-          set -euxo pipefail
-          if [ -x "./gradlew" ]; then
-            ./gradlew :app:assembleDebug --stacktrace --warning-mode=all --no-daemon
-          else
-            gradle :app:assembleDebug --stacktrace --warning-mode=all --no-daemon
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
           fi
 
-      - name: Find generated APK
-        id: apk
-        shell: bash
-        working-directory: ${{ steps.locate.outputs.project_dir }}
+      # Compila APK de debug (sin tests para hacerlo más rápido/estable)
+      - name: Build Debug APK
+        working-directory: ${{ env.WORKDIR }}
         run: |
           set -e
-          file="$(find . -type f -path '*/app/build/outputs/apk/debug/*.apk' | head -n1 || true)"
-          echo "file=$file" >> "$GITHUB_OUTPUT"
-          if [ -n "$file" ]; then
-            echo "APK: $file"
+          if [ -f "./gradlew" ]; then
+            ./gradlew --no-daemon --stacktrace --warning-mode=all :${MODULE}:assembleDebug -x test
           else
-            echo "No se encontró APK (aún)."
+            echo "No se encontró gradlew; usando 'gradle' del runner"
+            gradle --no-daemon --stacktrace --warning-mode=all :${MODULE}:assembleDebug -x test
           fi
 
+      # Ubica el APK generado y lo expone a los siguientes pasos
+      - name: Find generated APK
+        id: find_apk
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          APK_PATH=$(ls ${MODULE}/build/outputs/apk/debug/*.apk | head -n 1 || true)
+          if [ -z "$APK_PATH" ]; then
+            echo "No se encontró el APK en ${MODULE}/build/outputs/apk/debug/"
+            exit 1
+          fi
+          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
+          echo "APK encontrado: $APK_PATH"
+
+      # Sube el APK como artifact para descargarlo desde la UI de Actions
       - name: Upload APK artifact
-        if: ${{ steps.apk.outputs.file != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: ${{ steps.apk.outputs.file }}
+          name: app-debug.apk
+          path: ${{ steps.find_apk.outputs.apk_path }}
           if-no-files-found: error
