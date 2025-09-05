@@ -9,62 +9,22 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v3
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
-      - name: Unzip project
-        run: |
-          rm -rf src
-          mkdir -p src
-          # <- CAMBIA el nombre del ZIP si el tuyo es diferente
-          unzip -o "AgendaBienestarProyecto (2).zip" -d src
+      - name: Install Gradle
+        run: sudo apt-get install -y gradle
 
-      - name: Locate project root (with settings.gradle)
-        id: locate
-        run: |
-          set -e
-          # Busca la carpeta que tenga settings.gradle (marca el raíz del proyecto)
-          ROOT="$(find src -type f -name settings.gradle -o -name settings.gradle.kts | sed 's|/settings\.gradle.*||' | head -n1)"
-          if [ -z "$ROOT" ]; then
-            echo "No se encontró settings.gradle en el ZIP"
-            exit 1
-          fi
-          echo "root=$ROOT" >> $GITHUB_OUTPUT
-          echo "Proyecto en: $ROOT"
-
-      - name: Build with Gradle Wrapper (without gradlew script)
-        run: |
-          set -e
-          ROOT="${{ steps.locate.outputs.root }}"
-          WRAPPER_JAR="$ROOT/gradle/wrapper/gradle-wrapper.jar"
-          if [ ! -f "$WRAPPER_JAR" ]; then
-            echo "No se encontró $WRAPPER_JAR"
-            exit 1
-          fi
-          # Invoca directamente el wrapper
-          java -cp "$WRAPPER_JAR" org.gradle.wrapper.GradleWrapperMain \
-            -p "$ROOT" assembleDebug
-
-      - name: Collect APKs
-        id: collect
-        run: |
-          ROOT="${{ steps.locate.outputs.root }}"
-          MAPFILE -t APKS < <(find "$ROOT/app/build/outputs/apk" -type f -name "*.apk")
-          if [ "${#APKS[@]}" -eq 0 ]; then
-            echo "No se encontraron APKs"
-            find "$ROOT/app/build" -maxdepth 4 -type f | sort || true
-            exit 1
-          fi
-          echo "apk=${APKS[0]}" >> $GITHUB_OUTPUT
-          echo "APK encontrado: ${APKS[0]}"
+      - name: Build APK
+        run: gradle build
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
-          name: app-debug
-          path: ${{ steps.collect.outputs.apk }}
+          name: app-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
