@@ -1,4 +1,5 @@
 name: Build Android APK
+
 on:
   workflow_dispatch:
 
@@ -16,55 +17,72 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # 1) Descomprimir el ZIP más reciente al folder src/
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Unzip project
         run: |
-          set -e
-          ZIP="$(ls -1t *.zip | head -n 1)"
-          echo "ZIP file: $ZIP"
-          test -n "$ZIP"
-          rm -rf src
           mkdir -p src
-          unzip -q "$ZIP" -d src
-          echo "Root of src:"
-          ls -la src
+          ZIP_FILE="$(ls -1 | grep -E '^AgendaBienestarProyect.*\.zip$' | head -n 1 || true)"
+          if [ -z "$ZIP_FILE" ]; then
+            echo "No se encontró un ZIP que empiece con 'AgendaBienestarProyect'."
+            exit 1
+          fi
+          echo "Usando ZIP: $ZIP_FILE"
+          unzip -q "$ZIP_FILE" -d src
+          echo "Contenido de src/"
+          find src -maxdepth 3 -type f | sed 's/^/  /'
 
-      # 2) Instalar Gradle para poder GENERAR el wrapper
-      - name: Install Gradle (to generate wrapper)
+      - name: Locate project dir (settings.gradle)
+        id: locate
+        shell: bash
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y gradle
-          gradle --version
+          set -e
+          SETTINGS_PATH="$(find src -type f -name 'settings.gradle' -print -quit || true)"
+          if [ -z "$SETTINGS_PATH" ]; then
+            echo "No se encontró settings.gradle dentro del ZIP."
+            exit 1
+          fi
+          PROJECT_DIR="$(dirname "$SETTINGS_PATH")"
+          echo "PROJECT_DIR=$PROJECT_DIR" | tee -a "$GITHUB_ENV"
+          echo "Proyecto detectado en: $PROJECT_DIR"
+          echo "Listado del proyecto:"
+          ls -la "$PROJECT_DIR"
 
-      # 3) Generar gradle wrapper dentro del runner
-      - name: Generate Gradle wrapper
-        working-directory: src
+      # Si no hay gradlew, instala Gradle para poder compilar
+      - name: Ensure Gradle available
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.6
+
+      - name: Build APK
         run: |
-          # Debe haber build.gradle y settings.gradle en src/
-          test -f build.gradle || (echo "No existe build.gradle en src/"; exit 1)
-          gradle wrapper
-          ls -la
-          ls -la gradle/wrapper || true
+          cd "$PROJECT_DIR"
+          if [ -f gradlew ]; then
+            echo "Usando Gradle Wrapper"
+            chmod +x gradlew
+            ./gradlew --no-daemon :app:assembleDebug
+          else
+            echo "No hay gradlew; usando Gradle instalado"
+            gradle --no-daemon :app:assembleDebug
+          fi
 
-      # 4) Compilar con el wrapper recién generado
-      - name: Build APK (assembleDebug)
-        working-directory: src
-        run: |
-          chmod +x ./gradlew
-          ./gradlew -p app assembleDebug
-
-      # 5) Recopilar y publicar APKs
       - name: Collect APKs
-        if: always()
+        id: collect
         run: |
-          mkdir -p apk_out
-          find src/app/build/outputs/apk -type f -name "*.apk" -print -exec cp {} apk_out/ \; || true
-          ls -la apk_out || true
+          APK_DIR="$PROJECT_DIR/app/build/outputs/apk"
+          echo "Buscando APKs en: $APK_DIR"
+          find "$APK_DIR" -type f -name "*.apk" -print > apk_list.txt || true
+          cat apk_list.txt
+          COUNT=$(wc -l < apk_list.txt | tr -d ' ')
+          if [ "$COUNT" -eq 0 ]; then
+            echo "No se encontró ningún APK."
+            exit 1
+          fi
 
       - name: Upload APK artifact
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: app-apks
-          path: apk_out/*
-          if-no-files-found: warn
+          path: |
+            $(cat apk_list.txt)
