@@ -1,41 +1,70 @@
 name: Build Android APK
-on: workflow_dispatch
+
+on:
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
-    # 👇 MUY IMPORTANTE: carpeta donde está el proyecto Android (app/, gradle/, build.gradle, etc.)
-    defaults:
-      run:
-        working-directory: AgendaBienestarProyecto
-
     steps:
+      # 1) Obtener el repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2) Detectar la carpeta del proyecto (donde está gradlew)
+      #    Si no encuentra, usa la raíz "."
+      - name: Detect project directory
+        id: findproj
+        shell: bash
+        run: |
+          set -e
+          HIT="$(git ls-files | grep -m1 -E '(^|/)gradlew$' || true)"
+          if [ -n "$HIT" ]; then
+            PROJ_DIR="$(dirname "$HIT")"
+            # si gradlew está en la raíz, dirname devuelve "."
+            echo "proj_dir=$PROJ_DIR" >> "$GITHUB_OUTPUT"
+          else
+            echo "⚠️  No se encontró gradlew. Se usará la raíz del repo."
+            echo "proj_dir=." >> "$GITHUB_OUTPUT"
+          fi
+          echo "Proyecto en: $PROJ_DIR"
+
+      # 3) Asegurar permisos de ejecución al gradlew
+      - name: Make gradlew executable
+        if: always()
+        run: chmod +x gradlew || true
+        working-directory: ${{ steps.findproj.outputs.proj_dir }}
+
+      # 4) JDK 17 (recomendado por Android Gradle Plugin)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: '17'
 
+      # 5) Instalar Android SDK y paquetes esenciales
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-
-      # Cache + Gradle sin wrapper (vale porque arriba se provisiona Gradle)
-      - name: Prepare Gradle
-        uses: gradle/gradle-build-action@v3
         with:
-          gradle-version: 8.6
-          build-root-directory: AgendaBienestarProyecto
+          packages: |
+            platform-tools
+            platforms;android-34
+            build-tools;34.0.0
 
+      # 6) Cache de Gradle (acelera reconstrucciones)
+      - name: Prepare Gradle (cache)
+        uses: gradle/actions/setup-gradle@v3
+
+      # 7) Compilar APK Debug
       - name: Build Debug APK
-        run: gradle :app:assembleDebug --stacktrace --warning-mode=all --no-daemon
+        run: ./gradlew :app:assembleDebug --stacktrace --warning-mode=all --no-daemon
+        working-directory: ${{ steps.findproj.outputs.proj_dir }}
 
+      # 8) Subir el APK como artefacto descargable
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: app-debug-apk
+          path: ${{ steps.findproj.outputs.proj_dir }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
