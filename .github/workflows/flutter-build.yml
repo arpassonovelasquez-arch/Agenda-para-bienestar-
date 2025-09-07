@@ -17,127 +17,109 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Tener Flutter disponible no estorba, y se usará si el ZIP es un proyecto Flutter
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.22.0'
 
-      # 🔽 Cambia solo el nombre del ZIP si usas otro archivo
+      # Cambia aquí si subes otro ZIP distinto
       - name: Define ZIP to use
-        run: echo "PROJECT_ZIP=AgendaBienestarProyecto.zip" >> $GITHUB_ENV
+        run: echo "PROJECT_ZIP=Agenda-para-bienestar--main.zip" >> $GITHUB_ENV
 
       - name: Unzip project
-        shell: bash
         run: |
-          set -e
           if [ ! -f "$PROJECT_ZIP" ]; then
-            echo "❌ No se encontró $PROJECT_ZIP en la raíz del repo."
-            echo "Contenido de la raíz:"
-            ls -la
+            echo "No se encontró $PROJECT_ZIP en la raíz del repo."
+            echo "Sube el ZIP al repositorio (nivel raíz) o ajusta PROJECT_ZIP."
             exit 1
           fi
           mkdir -p app_src
           unzip -q "$PROJECT_ZIP" -d app_src
-
-          echo "📂 Árbol (primeros niveles) del ZIP descomprimido:"
-          find app_src -maxdepth 3 -type d -print
+          ROOT=$(ls -1 app_src | head -n1 | tr -d '\n')
+          PROJECT_PATH="app_src/$ROOT"
+          echo "PROJECT_PATH=$PROJECT_PATH" >> $GITHUB_ENV
+          echo "Contenido principal descomprimido en: $PROJECT_PATH"
+          ls -la "$PROJECT_PATH" || true
 
       - name: Detect project type (Flutter or Android Gradle)
-        id: detect
-        shell: bash
         run: |
-          set -e
-
-          # 1) Flutter: pubspec.yaml en algún punto dentro de app_src
-          PUBSPEC_PATH=$(find app_src -maxdepth 3 -type f -name pubspec.yaml | head -n1 || true)
-          if [ -n "$PUBSPEC_PATH" ]; then
-            PROJECT_PATH=$(dirname "$PUBSPEC_PATH")
-            echo "type=flutter" >> "$GITHUB_OUTPUT"
-            echo "path=$PROJECT_PATH" >> "$GITHUB_OUTPUT"
-            echo "✅ Detectado proyecto Flutter en: $PROJECT_PATH"
-            exit 0
-          fi
-
-          # 2) Android Gradle: settings.gradle o gradlew dentro de app_src
-          ANDROID_ROOT=""
-          if [ -f app_src/settings.gradle ] || [ -f app_src/settings.gradle.kts ]; then
-            ANDROID_ROOT="app_src"
+          if [ -f "$PROJECT_PATH/pubspec.yaml" ]; then
+            echo "PROJECT_KIND=flutter" >> $GITHUB_ENV
+            echo "Detectado proyecto Flutter"
           else
-            # buscar un settings.gradle dentro de subcarpetas
-            SG=$(find app_src -maxdepth 3 -type f \( -name settings.gradle -o -name settings.gradle.kts \) | head -n1 || true)
-            if [ -n "$SG" ]; then
-              ANDROID_ROOT=$(dirname "$SG")
-            fi
+            echo "PROJECT_KIND=android" >> $GITHUB_ENV
+            echo "Detectado proyecto Android (Gradle)"
           fi
 
-          if [ -n "$ANDROID_ROOT" ]; then
-            echo "type=android" >> "$GITHUB_OUTPUT"
-            echo "path=$ANDROID_ROOT" >> "$GITHUB_OUTPUT"
-            echo "✅ Detectado proyecto Android Gradle en: $ANDROID_ROOT"
-            exit 0
-          fi
-
-          echo "❌ No se detectó ni pubspec.yaml (Flutter) ni settings.gradle (Android)."
-          echo "Estructura encontrada:"
-          find app_src -maxdepth 3 -print
-          exit 1
-
-      # ---------- BUILD FLUTTER ----------
+      # ---- FLUTTER ----
       - name: Install Flutter deps
-        if: steps.detect.outputs.type == 'flutter'
-        working-directory: ${{ steps.detect.outputs.path }}
+        if: env.PROJECT_KIND == 'flutter'
+        working-directory: ${{ env.PROJECT_PATH }}
         run: flutter pub get
 
       - name: Build Flutter APK
-        if: steps.detect.outputs.type == 'flutter'
-        working-directory: ${{ steps.detect.outputs.path }}
+        if: env.PROJECT_KIND == 'flutter'
+        working-directory: ${{ env.PROJECT_PATH }}
         run: flutter build apk --release
 
       - name: Build Flutter AAB
-        if: steps.detect.outputs.type == 'flutter'
-        working-directory: ${{ steps.detect.outputs.path }}
+        if: env.PROJECT_KIND == 'flutter'
+        working-directory: ${{ env.PROJECT_PATH }}
         run: flutter build appbundle --release
 
-      # ---------- BUILD ANDROID GRADLE ----------
+      # ---- ANDROID (GRADLE) ----
       - name: Prepare Gradle Wrapper
-        if: steps.detect.outputs.type == 'android'
-        working-directory: ${{ steps.detect.outputs.path }}
-        shell: bash
+        if: env.PROJECT_KIND == 'android'
         run: |
-          set -e
-          if [ -f gradlew ]; then
-            chmod +x gradlew
-          else
-            echo "⚠️ No hay gradlew; creando wrapper…"
-            # Intentar crear wrapper si hay build.gradle en la raíz Android
-            if grep -q "plugin" settings.gradle* || [ -f build.gradle ] || [ -f build.gradle.kts ]; then
-              gradle wrapper
-              chmod +x gradlew
-            fi
+          cd "$PROJECT_PATH"
+          if [ ! -f gradlew ]; then
+            echo "No hay gradlew. Instalando gradle para generar wrapper..."
+            sudo apt-get update -y
+            sudo apt-get install -y gradle
+            gradle wrapper --gradle-version 8.7
           fi
+          chmod +x gradlew
+          echo "Wrapper listo"
+
+      - name: (Android) Fix android:exported if missing
+        if: env.PROJECT_KIND == 'android'
+        run: |
+          MANIFEST=$(find "$PROJECT_PATH" -path "*/app/src/main/AndroidManifest.xml" | head -n1)
+          echo "Manifest detectado: $MANIFEST"
+          if [ -f "$MANIFEST" ]; then
+            if grep -q "android.intent.action.MAIN" "$MANIFEST" && ! grep -q 'android:exported=' "$MANIFEST"; then
+              echo "Parcheando Manifest para agregar android:exported=\"true\" a la Activity principal..."
+              # Añade android:exported="true" a la primera <activity ...> (GNU sed)
+              sed -i '0,/<activity /s//<activity android:exported="true" /' "$MANIFEST"
+            else
+              echo "No requiere parche (ya tiene exported o no hay MAIN)."
+            fi
+          else
+            echo "AndroidManifest.xml no encontrado. Continuando..."
+          fi
+          echo "Vista previa Manifest:"
+          sed -n '1,120p' "$MANIFEST" || true
 
       - name: Build Android APK (Gradle)
-        if: steps.detect.outputs.type == 'android'
-        working-directory: ${{ steps.detect.outputs.path }}
-        run: ./gradlew :app:assembleRelease
+        if: env.PROJECT_KIND == 'android'
+        working-directory: ${{ env.PROJECT_PATH }}
+        run: |
+          ./gradlew :app:assembleRelease
 
-      # ---------- ARTIFACTOS ----------
+      # ---- ARTIFACTOS ----
       - name: Upload Flutter artifacts
-        if: steps.detect.outputs.type == 'flutter'
+        if: env.PROJECT_KIND == 'flutter'
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-release
+          name: flutter-build
           path: |
-            ${{ steps.detect.outputs.path }}/build/app/outputs/apk/release/*.apk
-            ${{ steps.detect.outputs.path }}/build/app/outputs/bundle/release/*.aab
-          if-no-files-found: warn
+            ${{ env.PROJECT_PATH }}/build/app/outputs/flutter-apk/*release*.apk
+            ${{ env.PROJECT_PATH }}/build/app/outputs/bundle/release/*.aab
 
       - name: Upload Android APK artifact
-        if: steps.detect.outputs.type == 'android'
+        if: env.PROJECT_KIND == 'android'
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk-release
+          name: android-apk
           path: |
-            ${{ steps.detect.outputs.path }}/app/build/outputs/apk/release/*.apk
-          if-no-files-found: warn
+            ${{ env.PROJECT_PATH }}/app/build/outputs/apk/release/*.apk
