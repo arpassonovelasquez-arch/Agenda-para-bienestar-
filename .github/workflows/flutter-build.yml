@@ -1,125 +1,27 @@
-name: Build Flutter/Android from ZIP
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.agenda.bienestar">
 
-on:
-  workflow_dispatch:
+    <application
+        android:label="Agenda para Bienestar"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:supportsRtl="true">
 
-jobs:
-  build-android:
-    runs-on: ubuntu-latest
+        <!-- Activity principal con intent-filter => requiere exported="true" en Android 12+ -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize">
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.22.0'
-
-      # Cambia aquí si subes otro ZIP distinto
-      - name: Define ZIP to use
-        run: echo "PROJECT_ZIP=Agenda-para-bienestar--main.zip" >> $GITHUB_ENV
-
-      - name: Unzip project
-        run: |
-          if [ ! -f "$PROJECT_ZIP" ]; then
-            echo "No se encontró $PROJECT_ZIP en la raíz del repo."
-            echo "Sube el ZIP al repositorio (nivel raíz) o ajusta PROJECT_ZIP."
-            exit 1
-          fi
-          mkdir -p app_src
-          unzip -q "$PROJECT_ZIP" -d app_src
-          ROOT=$(ls -1 app_src | head -n1 | tr -d '\n')
-          PROJECT_PATH="app_src/$ROOT"
-          echo "PROJECT_PATH=$PROJECT_PATH" >> $GITHUB_ENV
-          echo "Contenido principal descomprimido en: $PROJECT_PATH"
-          ls -la "$PROJECT_PATH" || true
-
-      - name: Detect project type (Flutter or Android Gradle)
-        run: |
-          if [ -f "$PROJECT_PATH/pubspec.yaml" ]; then
-            echo "PROJECT_KIND=flutter" >> $GITHUB_ENV
-            echo "Detectado proyecto Flutter"
-          else
-            echo "PROJECT_KIND=android" >> $GITHUB_ENV
-            echo "Detectado proyecto Android (Gradle)"
-          fi
-
-      # ---- FLUTTER ----
-      - name: Install Flutter deps
-        if: env.PROJECT_KIND == 'flutter'
-        working-directory: ${{ env.PROJECT_PATH }}
-        run: flutter pub get
-
-      - name: Build Flutter APK
-        if: env.PROJECT_KIND == 'flutter'
-        working-directory: ${{ env.PROJECT_PATH }}
-        run: flutter build apk --release
-
-      - name: Build Flutter AAB
-        if: env.PROJECT_KIND == 'flutter'
-        working-directory: ${{ env.PROJECT_PATH }}
-        run: flutter build appbundle --release
-
-      # ---- ANDROID (GRADLE) ----
-      - name: Prepare Gradle Wrapper
-        if: env.PROJECT_KIND == 'android'
-        run: |
-          cd "$PROJECT_PATH"
-          if [ ! -f gradlew ]; then
-            echo "No hay gradlew. Instalando gradle para generar wrapper..."
-            sudo apt-get update -y
-            sudo apt-get install -y gradle
-            gradle wrapper --gradle-version 8.7
-          fi
-          chmod +x gradlew
-          echo "Wrapper listo"
-
-      - name: (Android) Fix android:exported if missing
-        if: env.PROJECT_KIND == 'android'
-        run: |
-          MANIFEST=$(find "$PROJECT_PATH" -path "*/app/src/main/AndroidManifest.xml" | head -n1)
-          echo "Manifest detectado: $MANIFEST"
-          if [ -f "$MANIFEST" ]; then
-            if grep -q "android.intent.action.MAIN" "$MANIFEST" && ! grep -q 'android:exported=' "$MANIFEST"; then
-              echo "Parcheando Manifest para agregar android:exported=\"true\" a la Activity principal..."
-              # Añade android:exported="true" a la primera <activity ...> (GNU sed)
-              sed -i '0,/<activity /s//<activity android:exported="true" /' "$MANIFEST"
-            else
-              echo "No requiere parche (ya tiene exported o no hay MAIN)."
-            fi
-          else
-            echo "AndroidManifest.xml no encontrado. Continuando..."
-          fi
-          echo "Vista previa Manifest:"
-          sed -n '1,120p' "$MANIFEST" || true
-
-      - name: Build Android APK (Gradle)
-        if: env.PROJECT_KIND == 'android'
-        working-directory: ${{ env.PROJECT_PATH }}
-        run: |
-          ./gradlew :app:assembleRelease
-
-      # ---- ARTIFACTOS ----
-      - name: Upload Flutter artifacts
-        if: env.PROJECT_KIND == 'flutter'
-        uses: actions/upload-artifact@v4
-        with:
-          name: flutter-build
-          path: |
-            ${{ env.PROJECT_PATH }}/build/app/outputs/flutter-apk/*release*.apk
-            ${{ env.PROJECT_PATH }}/build/app/outputs/bundle/release/*.aab
-
-      - name: Upload Android APK artifact
-        if: env.PROJECT_KIND == 'android'
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-apk
-          path: |
-            ${{ env.PROJECT_PATH }}/app/build/outputs/apk/release/*.apk
+        <!-- Si en tu proyecto hay OTROS <activity>, <service> o <receiver> con <intent-filter>,
+             también deben tener android:exported="true" o "false" según corresponda. -->
+    </application>
+</manifest>
