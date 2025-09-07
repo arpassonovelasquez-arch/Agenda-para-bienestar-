@@ -24,7 +24,8 @@ jobs:
 
       # ⬇️ Cambia el nombre del ZIP si tu proyecto está en otro archivo
       - name: Define ZIP to use
-        run: echo "PROJECT_ZIP=AgendaBienestarProyecto.zip" >> $GITHUB_ENV
+        run: echo "PROJECT_ZIP=AgendaBienestarProyecto (2).zip"
+  >> $GITHUB_ENV
 
       - name: Unzip project
         run: |
