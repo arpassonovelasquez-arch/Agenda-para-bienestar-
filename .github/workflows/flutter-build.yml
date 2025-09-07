@@ -20,19 +20,25 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0' # o la versión que uses en tu proyecto
+          flutter-version: '3.22.0' # o la versión que uses
+
+      - name: Navigate to project directory
+        run: cd AgendaBienestarProyecto
 
       - name: Install dependencies
+        working-directory: AgendaBienestarProyecto
         run: flutter pub get
 
       - name: Build APK
+        working-directory: AgendaBienestarProyecto
         run: flutter build apk --release
 
       - name: Build App Bundle (AAB)
+        working-directory: AgendaBienestarProyecto
         run: flutter build appbundle --release
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: release-build
-          path: build/app/outputs/bundle/release/*.aab
+          path: AgendaBienestarProyecto/build/app/outputs/bundle/release/*.aab
