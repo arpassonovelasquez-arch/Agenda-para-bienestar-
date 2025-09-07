@@ -20,25 +20,53 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0' # o la versión que uses
+          flutter-version: '3.22.0'  # usa tu versión si es distinta
 
-      - name: Navigate to project directory
-        run: cd AgendaBienestarProyecto
+      # ⬇️ Cambia el nombre del ZIP si tu proyecto está en otro archivo
+      - name: Define ZIP to use
+        run: echo "PROJECT_ZIP=AgendaBienestarProyecto.zip" >> $GITHUB_ENV
+
+      - name: Unzip project
+        run: |
+          if [ ! -f "$PROJECT_ZIP" ]; then
+            echo "No se encontró $PROJECT_ZIP en la raíz del repo"; exit 1
+          fi
+          mkdir -p app_src
+          unzip -q "$PROJECT_ZIP" -d app_src
+          ROOT=$(ls -1 app_src | head -n1 || true)
+
+          if [ -f "app_src/pubspec.yaml" ]; then
+            echo "PROJECT_PATH=$PWD/app_src" >> $GITHUB_ENV
+          elif [ -n "$ROOT" ] && [ -f "app_src/$ROOT/pubspec.yaml" ]; then
+            echo "PROJECT_PATH=$PWD/app_src/$ROOT" >> $GITHUB_ENV
+          else
+            echo "pubspec.yaml no encontrado dentro del ZIP"; ls -R app_src; exit 1
+          fi
+
+      - name: Show project tree
+        run: |
+          echo "Ruta elegida: $PROJECT_PATH"
+          ls -la "$PROJECT_PATH"
 
       - name: Install dependencies
-        working-directory: AgendaBienestarProyecto
-        run: flutter pub get
+        run: |
+          cd "$PROJECT_PATH"
+          flutter pub get
 
       - name: Build APK
-        working-directory: AgendaBienestarProyecto
-        run: flutter build apk --release
+        run: |
+          cd "$PROJECT_PATH"
+          flutter build apk --release
 
       - name: Build App Bundle (AAB)
-        working-directory: AgendaBienestarProyecto
-        run: flutter build appbundle --release
+        run: |
+          cd "$PROJECT_PATH"
+          flutter build appbundle --release
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: release-build
-          path: AgendaBienestarProyecto/build/app/outputs/bundle/release/*.aab
+          path: |
+            **/build/app/outputs/flutter-apk/*.apk
+            **/build/app/outputs/bundle/release/*.aab
