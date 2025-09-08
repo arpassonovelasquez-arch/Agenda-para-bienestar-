@@ -7,6 +7,16 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
 
+    env:
+      # 👇 Nombre interno válido para Flutter (minúsculas + guiones bajos)
+      PROJECT_NAME: agenda_para_bienestar
+      # 👇 Paquete Android (visible en Ajustes del sistema)
+      ANDROID_APP_ID: com.agenda.bienestar
+      # 👇 Nombre visible bajo el ícono y en la barra del sistema
+      APP_LABEL: Agenda para Bienestar
+      # 👇 Versión de Flutter estable
+      FLUTTER_VERSION: "3.22.0"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,183 +30,118 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'   # estable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: "stable"
+          cache: true
 
-      #    - name: Create Flutter project
-      run: |
-        flutter --version
-        flutter create \
-          --org com.agenda.bienestar \
-          --project-name agendabienestar \
-          --platforms android \
-          app_src
-
-
-      # 2) Sobrescribir el AndroidManifest con tu label e intent-filter (exported)
-      - name: Apply AndroidManifest
+      # 1) Crear un proyecto Flutter mínimo con nombre interno válido
+      - name: Create Flutter project
         run: |
-          cat > app/android/app/src/main/AndroidManifest.xml <<'XML'
+          flutter --version
+          rm -rf app_src
+          flutter create \
+            --project-name $PROJECT_NAME \
+            --org $ANDROID_APP_ID \
+            app_src
+
+      # 2) Aplicar AndroidManifest con el nombre visible correcto
+      - name: Apply AndroidManifest (label + permisos)
+        run: |
+          MANIFEST="app_src/android/app/src/main/AndroidManifest.xml"
+          cat > "$MANIFEST" << 'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.agenda.bienestar.agendabienestar">
-            <application
-                android:label="Agenda para Bienestar"
-                android:icon="@mipmap/ic_launcher"
-                android:roundIcon="@mipmap/ic_launcher_round"
-                android:allowBackup="true"
-                android:supportsRtl="true"
-                android:usesCleartextTraffic="false">
-              <activity
-                  android:name=".MainActivity"
-                  android:exported="true"
-                  android:launchMode="singleTop"
-                  android:windowSoftInputMode="adjustResize">
-                <intent-filter>
-                  <action android:name="android.intent.action.MAIN" />
-                  <category android:name="android.intent.category.LAUNCHER" />
-                </intent-filter>
-              </activity>
-
-              <!-- (Opcional) Si usas AdMob, pon tu APP_ID real -->
-              <!--
-              <meta-data
-                  android:name="com.google.android.gms.ads.APPLICATION_ID"
-                  android:value="ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX"/>
-              -->
-            </application>
+              package="${ANDROID_APP_ID}">
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <application
+                  android:name="${applicationName}"
+                  android:label="${APP_LABEL}"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:allowBackup="true"
+                  android:supportsRtl="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTop"
+                      android:windowSoftInputMode="adjustResize">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+              </application>
           </manifest>
           XML
+        shell: bash
+        env:
+          ANDROID_APP_ID: ${{ env.ANDROID_APP_ID }}
+          APP_LABEL: ${{ env.APP_LABEL }}
 
-      # 3) Reemplazar lib/main.dart con una pantalla de lista + FAB
-      - name: Apply main.dart (lista + FAB)
+      # 3) Reemplazar main.dart por una pantalla de bienvenida
+      - name: Apply main.dart (pantalla de inicio)
         run: |
-          cat > app/lib/main.dart <<'DART'
+          MAIN="app_src/lib/main.dart"
+          cat > "$MAIN" << 'DART'
           import 'package:flutter/material.dart';
+          void main() => runApp(const MyApp());
 
-          void main() => runApp(const AgendaApp());
-
-          class AgendaApp extends StatelessWidget {
-            const AgendaApp({super.key});
-
+          class MyApp extends StatelessWidget {
+            const MyApp({super.key});
             @override
             Widget build(BuildContext context) {
               return MaterialApp(
+                debugShowCheckedModeBanner: false,
                 title: 'Agenda para Bienestar',
                 theme: ThemeData(
+                  colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
                   useMaterial3: true,
-                  colorSchemeSeed: Colors.teal,
-                  brightness: Brightness.light,
                 ),
-                home: const AgendaHomePage(),
+                home: const HomePage(),
               );
             }
           }
 
-          class AgendaHomePage extends StatefulWidget {
-            const AgendaHomePage({super.key});
-
-            @override
-            State<AgendaHomePage> createState() => _AgendaHomePageState();
-          }
-
-          class _AgendaHomePageState extends State<AgendaHomePage> {
-            final List<String> _items = [
-              'Respirar 5 min',
-              'Vaso de agua',
-              'Estiramientos'
-            ];
-
-            void _addItem() async {
-              final controller = TextEditingController();
-              final text = await showDialog<String>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Nuevo evento'),
-                  content: TextField(
-                    controller: controller,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      hintText: 'Ej: Caminar 10 min',
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Cancelar'),
-                    ),
-                    FilledButton(
-                      onPressed: () =>
-                          Navigator.pop(ctx, controller.text.trim()),
-                      child: const Text('Guardar'),
-                    ),
-                  ],
-                ),
-              );
-              if (text != null && text.isNotEmpty) {
-                setState(() => _items.add(text));
-              }
-            }
-
-            void _removeItem(int index) {
-              setState(() => _items.removeAt(index));
-            }
-
+          class HomePage extends StatelessWidget {
+            const HomePage({super.key});
             @override
             Widget build(BuildContext context) {
               return Scaffold(
-                appBar: AppBar(
-                  title: const Text('Agenda de Bienestar'),
+                appBar: AppBar(title: const Text('Agenda para Bienestar')),
+                body: const Center(
+                  child: Text(
+                    '¡Listo! Base de la app creada.\nAquí agregaremos la lista y el FAB.',
+                    textAlign: TextAlign.center,
+                  ),
                 ),
-                body: _items.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'Sin eventos. Toca + para agregar uno.',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: _items.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (_, i) {
-                          return Dismissible(
-                            key: ValueKey(_items[i]),
-                            direction: DismissDirection.endToStart,
-                            onDismissed: (_) => _removeItem(i),
-                            background: Container(
-                              alignment: Alignment.centerRight,
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              color: Colors.red.withOpacity(0.2),
-                              child: const Icon(Icons.delete),
-                            ),
-                            child: Card(
-                              child: ListTile(
-                                title: Text(_items[i]),
-                                leading: const Icon(Icons.event_note),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                floatingActionButton: FloatingActionButton(
-                  onPressed: _addItem,
-                  child: const Icon(Icons.add),
+                floatingActionButton: FloatingActionButton.extended(
+                  onPressed: () {},
+                  label: const Text('Añadir'),
+                  icon: const Icon(Icons.add),
                 ),
               );
             }
           }
           DART
 
+      # 4) Asegurar nombre interno correcto en pubspec.yaml
+      - name: Fix pubspec name
+        run: |
+          sed -i "s/^name: .*/name: ${PROJECT_NAME}/" app_src/pubspec.yaml
+
+      # 5) Resolver dependencias
       - name: Flutter pub get
-        working-directory: app
+        working-directory: app_src
         run: flutter pub get
 
+      # 6) Compilar APK (release)
       - name: Build Android APK (release)
-        working-directory: app
+        working-directory: app_src
         run: flutter build apk --release
 
+      # 7) Subir el APK como artefacto
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgendaBienestar-APK
-          path: app/build/app/outputs/flutter-apk/app-release.apk
+          name: AgendaParaBienestar-APK
+          path: app_src/build/app/outputs/flutter-apk/app-release.apk
