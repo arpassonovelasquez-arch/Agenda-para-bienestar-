@@ -22,14 +22,15 @@ jobs:
         with:
           flutter-version: '3.22.0'   # estable
 
-      # 1) Crear proyecto Flutter vacío en carpeta app/
-      - name: Create Flutter project
-        run: |
-          flutter --version
-          flutter create \
-            --org com.agenda.bienestar \
-            --project-name AgendaBienestar \
-            app
+      #    - name: Create Flutter project
+      run: |
+        flutter --version
+        flutter create \
+          --org com.agenda.bienestar \
+          --project-name agendabienestar \
+          --platforms android \
+          app_src
+
 
       # 2) Sobrescribir el AndroidManifest con tu label e intent-filter (exported)
       - name: Apply AndroidManifest
