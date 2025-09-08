@@ -1,0 +1,124 @@
+workflows:
+  android_release:
+    name: Build Android APK (Codemagic)
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      vars:
+        APP_NAME: "Agenda para Bienestar"
+        PACKAGE_ID: "com.agenda.bienestar"
+        PROJECT_DIR: "app_src"
+        FLUTTER_CHANNEL: "stable"
+        OUT_DIR: "artifacts"
+        OUT_APK: "AgendaParaBienestar-release.apk"
+    scripts:
+      - name: Set Flutter channel
+        script: |
+          flutter --version
+          flutter channel $FLUTTER_CHANNEL
+          flutter upgrade
+          flutter --version
+
+      - name: Create Flutter project
+        script: |
+          rm -rf $PROJECT_DIR
+          flutter create \
+            --platforms=android \
+            --org ${PACKAGE_ID%.*} \
+            --project-name agenda_para_bienestar \
+            $PROJECT_DIR
+
+      - name: Patch Android app name & package
+        script: |
+          cd $PROJECT_DIR
+          # applicationId
+          sed -i 's/applicationId "com.example.app"/applicationId "'"$PACKAGE_ID"'"/' android/app/build.gradle
+          # minSdk
+          sed -i 's/minSdkVersion [0-9][0-9]*/minSdkVersion 21/' android/app/build.gradle
+
+          # Manifest limpio (embedding v2) y label correcto
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          cat > $MANIFEST <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.agenda.bienestar">
+            <uses-permission android:name="android.permission.INTERNET"/>
+            <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+            <application
+                android:label="Agenda para Bienestar"
+                android:icon="@mipmap/ic_launcher"
+                android:roundIcon="@mipmap/ic_launcher_round"
+                android:allowBackup="true"
+                android:supportsRtl="true">
+              <activity
+                  android:name=".MainActivity"
+                  android:exported="true"
+                  android:launchMode="singleTop"
+                  android:theme="@style/LaunchTheme"
+                  android:windowSoftInputMode="adjustResize">
+                <intent-filter>
+                  <action android:name="android.intent.action.MAIN" />
+                  <category android:name="android.intent.category.LAUNCHER" />
+                </intent-filter>
+              </activity>
+            </application>
+          </manifest>
+          EOF
+
+          # Pantalla inicial simple
+          cat > lib/main.dart <<'EOF'
+          import 'package:flutter/material.dart';
+          void main() => runApp(const App());
+          class App extends StatelessWidget {
+            const App({super.key});
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(
+                title: 'Agenda para Bienestar',
+                theme: ThemeData(useMaterial3: true),
+                home: const HomePage(),
+              );
+            }
+          }
+          class HomePage extends StatelessWidget {
+            const HomePage({super.key});
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(title: const Text('Agenda para Bienestar')),
+                body: const Center(child: Text('¡Hola! App mínima lista.')),
+                floatingActionButton: FloatingActionButton(
+                  onPressed: () {},
+                  child: const Icon(Icons.add),
+                ),
+              );
+            }
+          }
+          EOF
+          cd -
+
+      - name: Flutter pub get
+        script: |
+          cd $PROJECT_DIR
+          flutter pub get
+          cd -
+
+      - name: Build APK (release)
+        script: |
+          cd $PROJECT_DIR
+          flutter build apk --release
+          cd -
+
+      - name: Rename APK nicely
+        script: |
+          mkdir -p "$OUT_DIR"
+          cp "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk" "$OUT_DIR/$OUT_APK"
+          echo "APK listo en $OUT_DIR/$OUT_APK"
+
+    artifacts:
+      - $OUT_DIR/AgendaParaBienestar-release.apk
+
+    publishing:
+      scripts:
+        - name: Print download hint
+          script: |
+            echo "Ve a Artifacts y descarga: $OUT_DIR/$OUT_APK"
