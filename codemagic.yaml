@@ -1,32 +1,23 @@
 workflows:
-  android_release:
+  android_debug_apk:
     name: Build Android (APK Release)
     instance_type: linux
     max_build_duration: 60
     environment:
       flutter: stable
       java: 17
-      vars:
-        APP_ID: "com.agenda.bienestar"
-        PROJECT_NAME: "agendaparabienestar"
-        APP_NAME: "Agenda para Bienestar"
+    vars:
+      APP_ID: "com.agenda.bienestar"
+      PROJECT_NAME: "agendaparabienestar"
+      APP_NAME: "Agenda para Bienestar"
     scripts:
       - name: Verificar versión de Flutter
         script: flutter --version
-
       - name: Limpiar proyecto anterior
         script: flutter clean
-
       - name: Obtener dependencias
         script: flutter pub get
-
       - name: Construir APK en modo release
         script: flutter build apk --release
-
     artifacts:
       - build/app/outputs/flutter-apk/app-release.apk
-
-    publishing:
-      email:
-        recipients:
-          - "tu_correo_aqui@gmail.com"
