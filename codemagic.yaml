@@ -1,23 +1,33 @@
 workflows:
   android_debug_apk:
-    name: Build Android (APK Release)
+    name: Build React Native Android (Debug APK)
     instance_type: linux
     max_build_duration: 60
     environment:
-      flutter: stable
+      node: 18
       java: 17
-    vars:
-      APP_ID: "com.agenda.bienestar"
-      PROJECT_NAME: "agendaparabienestar"
-      APP_NAME: "Agenda para Bienestar"
+      vars:
+        ANDROID_HOME: /opt/android-sdk-linux
+    cache:
+      cache_paths:
+        - ~/.gradle/caches
+        - ~/.gradle/wrapper
+        - ~/.npm
+        - ~/.cache/yarn
     scripts:
-      - name: Verificar versión de Flutter
-        script: flutter --version
-      - name: Limpiar proyecto anterior
-        script: flutter clean
-      - name: Obtener dependencias
-        script: flutter pub get
-      - name: Construir APK en modo release
-        script: flutter build apk --release
+      - name: Instalar dependencias Node
+        script: |
+          npm ci || npm install
+      - name: Aceptar licencias del SDK de Android
+        script: |
+          yes | sdkmanager --licenses || true
+      - name: Preparar Gradle
+        script: |
+          cd android
+          ./gradlew tasks
+      - name: Compilar APK Debug (instalable)
+        script: |
+          cd android
+          ./gradlew assembleDebug
     artifacts:
-      - build/app/outputs/flutter-apk/app-release.apk
+      - android/app/build/outputs/apk/debug/app-debug.apk
