@@ -1,7 +1,7 @@
 workflows:
-  android_debug_apk:
-    name: Build Android (APK debug)
-    instance_type: linux_x2
+  android_release:
+    name: Build Android (APK Release)
+    instance_type: linux
     max_build_duration: 60
     environment:
       flutter: stable
@@ -10,135 +10,23 @@ workflows:
         APP_ID: "com.agenda.bienestar"
         PROJECT_NAME: "agendaparabienestar"
         APP_NAME: "Agenda para Bienestar"
-
     scripts:
-      - name: Mostrar versión de Flutter
+      - name: Verificar versión de Flutter
         script: flutter --version
 
-      - name: Crear proyecto Flutter (si no existe)
-        script: |
-          if [ ! -d "$PROJECT_NAME" ]; then
-            flutter create --project-name "$PROJECT_NAME" --org "$APP_ID" "$PROJECT_NAME"
-          fi
+      - name: Limpiar proyecto anterior
+        script: flutter clean
 
-      - name: Reemplazar AndroidManifest.xml (label + permisos + exported)
-        script: |
-          cat > "$PROJECT_NAME/android/app/src/main/AndroidManifest.xml" <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.agenda.bienestar">
+      - name: Obtener dependencias
+        script: flutter pub get
 
-              <uses-permission android:name="android.permission.INTERNET" />
-
-              <application
-                  android:name="${applicationName}"
-                  android:label="Agenda para Bienestar"
-                  android:icon="@mipmap/ic_launcher">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:launchMode="singleTop"
-                      android:theme="@style/LaunchTheme"
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-                      android:hardwareAccelerated="true"
-                      android:windowSoftInputMode="adjustResize">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-                      <meta-data
-                          android:name="io.flutter.embedding.android.NormalTheme"
-                          android:resource="@style/NormalTheme" />
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-      - name: Reemplazar lib/main.dart (pantalla de inicio)
-        script: |
-          cat > "$PROJECT_NAME/lib/main.dart" <<'DART'
-          import 'package:flutter/material.dart';
-
-          void main() => runApp(const MyApp());
-
-          class MyApp extends StatelessWidget {
-            const MyApp({super.key});
-            @override
-            Widget build(BuildContext context) {
-              return MaterialApp(
-                title: 'Agenda para Bienestar',
-                debugShowCheckedModeBanner: false,
-                theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
-                home: const HomePage(),
-              );
-            }
-          }
-
-          class HomePage extends StatefulWidget {
-            const HomePage({super.key});
-            @override
-            State<HomePage> createState() => _HomePageState();
-          }
-
-          class _HomePageState extends State<HomePage> {
-            final List<String> items = [];
-            final controller = TextEditingController();
-
-            @override
-            Widget build(BuildContext context) {
-              return Scaffold(
-                appBar: AppBar(title: const Text('Agenda para Bienestar')),
-                body: items.isEmpty
-                    ? const Center(child: Text('¡Hola! App mínima lista.'))
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(16),
-                        itemBuilder: (_, i) => ListTile(title: Text(items[i])),
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemCount: items.length,
-                      ),
-                floatingActionButton: FloatingActionButton(
-                  onPressed: () async {
-                    final text = await showDialog<String>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Nuevo ítem'),
-                        content: TextField(controller: controller, autofocus: true),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-                          ElevatedButton(onPressed: () => Navigator.pop(ctx, controller.text), child: const Text('Agregar')),
-                        ],
-                      ),
-                    );
-                    if (text != null && text.trim().isNotEmpty) {
-                      setState(() => items.add(text.trim()));
-                      controller.clear();
-                    }
-                  },
-                  child: const Icon(Icons.add),
-                ),
-              );
-            }
-          }
-          DART
-
-      - name: flutter pub get
-        script: |
-          cd "$PROJECT_NAME"
-          flutter pub get
-
-      - name: Compilar APK (debug)
-        script: |
-          cd "$PROJECT_NAME"
-          flutter build apk --debug
+      - name: Construir APK en modo release
+        script: flutter build apk --release
 
     artifacts:
-      - "$PROJECT_NAME/build/app/outputs/flutter-apk/*.apk"
+      - build/app/outputs/flutter-apk/app-release.apk
 
     publishing:
-      # Quita o edita si quieres que te llegue correo desde Codemagic
       email:
         recipients:
-          - "your@email.com"
-        notify:
-          success: true
-          failure: true
+          - "tu_correo_aqui@gmail.com"
