@@ -8,6 +8,7 @@ workflows:
       java: 17
       vars:
         ANDROID_HOME: /opt/android-sdk-linux
+        ANDROID_SDK_ROOT: /opt/android-sdk-linux
     cache:
       cache_paths:
         - ~/.gradle/caches
@@ -15,19 +16,76 @@ workflows:
         - ~/.npm
         - ~/.cache/yarn
     scripts:
-      - name: Instalar dependencias Node
+      - name: Mostrar versiones y entorno
         script: |
-          npm ci || npm install
-      - name: Aceptar licencias del SDK de Android
+          node -v
+          npm -v
+          java -version
+          echo "ANDROID_HOME=$ANDROID_HOME"
+      - name: Instalar dependencias Node (bloquea si hay package-lock)
+        script: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+      - name: Aceptar licencias y asegurar SDK básico
         script: |
           yes | sdkmanager --licenses || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" || true
       - name: Preparar Gradle
         script: |
           cd android
-          ./gradlew tasks
+          chmod +x gradlew
+          ./gradlew --version
       - name: Compilar APK Debug (instalable)
         script: |
           cd android
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon --stacktrace
     artifacts:
       - android/app/build/outputs/apk/debug/app-debug.apk
+
+  android_release_aab:
+    name: Build React Native Android (Release AAB)
+    instance_type: linux
+    max_build_duration: 60
+    environment:
+      node: 18
+      java: 17
+      vars:
+        ANDROID_HOME: /opt/android-sdk-linux
+        ANDROID_SDK_ROOT: /opt/android-sdk-linux
+        # (Opcional) Variables para firma. Actívalas cuando las tengas en "Variables de entorno":
+        # CM_KEYSTORE: Encrypted(base64)
+        # CM_KEYSTORE_PASSWORD: your_keystore_password
+        # CM_KEY_ALIAS: your_key_alias
+        # CM_KEY_PASSWORD: your_key_password
+    cache:
+      cache_paths:
+        - ~/.gradle/caches
+        - ~/.gradle/wrapper
+        - ~/.npm
+        - ~/.cache/yarn
+    scripts:
+      - name: Instalar dependencias
+        script: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+      - name: Aceptar licencias y asegurar SDK básico
+        script: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" || true
+      # - name: (Opcional) Desencriptar keystore para firma
+      #   script: |
+      #     echo "$CM_KEYSTORE" | base64 -d > android/app/release.keystore
+      - name: Compilar AAB Release (sin firma por defecto)
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew bundleRelease --no-daemon --stacktrace
+    artifacts:
+      - android/app/build/outputs/bundle/release/app-release.aab
+      - android/app/build/outputs/mapping/release/mapping.txt
