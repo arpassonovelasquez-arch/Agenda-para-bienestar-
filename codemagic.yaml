@@ -1,15 +1,15 @@
 workflows:
-  expo_android_local:
-    name: Expo -> Android (APK local)
-    instance_type: linux_x2
+  expo_android_apk:
+    name: Build Expo → Android APK
+    instance_type: linux  # Forzamos plan gratuito
     max_build_duration: 60
 
     environment:
       node: 18
-      java: 17
+      java: 11
+      npm: 8
       vars:
-        CI: "1"
-        EXPO_NO_TELEMETRY: "1"
+        ANDROID_HOME: /opt/android-sdk-linux
 
     cache:
       cache_paths:
@@ -17,44 +17,39 @@ workflows:
         - ~/.gradle/caches
         - ~/.gradle/wrapper
 
+    triggering:
+      events: []  # Solo builds manuales, evita problemas con validación
+
     scripts:
-      - name: Verificar archivos y versión de Node
+      - name: Instalar dependencias
         script: |
-          echo "Listado de raíz:"
-          ls -la
-          echo "Node:"
-          node -v
-          if [ ! -f package.json ]; then
-            echo "FALTA package.json en la raíz del repo"; exit 1;
-          fi
+          npm install --legacy-peer-deps
 
-      - name: Limpiar instalación previa (idempotente)
+      - name: Verificar Expo
         script: |
-          rm -rf node_modules android build || true
-          rm -f yarn.lock # usamos npm
-          npm cache verify
+          npx expo --version || npx --yes expo@latest --version
 
-      - name: Instalar dependencias del proyecto
+      - name: Prebuild Android
         script: |
-          if [ -f package-lock.json ]; then
-            npm ci --no-audit --no-fund
-          else
-            npm install --no-audit --no-fund
-          fi
-
-      # IMPORTANTE: no instalar manualmente expo-modules-autolinking NI @expo/prebuild-config
-
-      - name: Prebuild de Expo a Android (limpio)
-        script: |
-          npx expo --version
           npx expo prebuild --platform android --non-interactive --clean
 
-      - name: Compilar APK (debug)
+      - name: Aceptar licencias de Android SDK
+        script: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+
+      - name: Dar permisos al Gradle Wrapper
+        script: |
+          chmod +x android/gradlew
+
+      - name: Compilar APK Release
         script: |
           cd android
-          ./gradlew assembleDebug
-          mkdir -p ../build
-          cp app/build/outputs/apk/debug/app-debug.apk ../build/AgendaParaBienestar-debug.apk
+          ./gradlew assembleRelease
+
+      - name: Copiar APK generado a artefactos
+        script: |
+          mkdir -p "$CM_ARTIFACTS"
+          cp app/build/outputs/apk/release/app-release.apk "$CM_ARTIFACTS/app-release.apk"
 
     artifacts:
-      - build/*.apk
+      - $CM_ARTIFACTS/app-release.apk
