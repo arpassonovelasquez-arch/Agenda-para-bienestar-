@@ -1,44 +1,65 @@
 workflows:
-  expo_android_local:
-    name: Expo -> Android (APK local)
-    instance_type: linux   # ✅ Gratis y compatible con tu plan
+  expo_android_apk:
+    name: Build Expo → Android (APK local)
+    instance_type: linux
     max_build_duration: 60
+
     environment:
       node: 18
       java: 17
       vars:
         ANDROID_HOME: /opt/android-sdk-linux
-        CI: "1"
+
     cache:
       cache_paths:
         - ~/.npm
         - ~/.gradle/caches
         - ~/.gradle/wrapper
+
+    triggering:
+      events:
+        - manual
+      branch_patterns:
+        - pattern: principal
+          include: true
+          source: true
+
     scripts:
-      - name: Verificar archivos y versión de Node
+      - name: Verificar entorno
         script: |
-          echo "Listado de raíz:"
-          ls -la
-          node -v
-          if [ ! -f package.json ]; then
-            echo "FALTA package.json en la raíz del repo"; exit 1;
-          fi
-      - name: Instalar Expo CLI y dependencias
+          echo "Node: $(node -v)"
+          echo "Java:"
+          java -version
+          echo "ANDROID_HOME=$ANDROID_HOME"
+
+      - name: Aceptar licencias de Android SDK
         script: |
-          npm install -g expo-cli
-          npm install --no-audit --no-fund
-      - name: Asegurar dependencias Expo/RN (idempotente)
+          yes | "$ANDROID_HOME/tools/bin/sdkmanager" --licenses || true
+
+      - name: Instalar dependencias
         script: |
-          npm install expo@50.0.7 react@18.2.0 react-native@0.73.4 expo-modules-autolinking@2.0.3 @expo/prebuild-config@6.0.1 --save
-      - name: Prebuild de Expo a Android
+          npm ci || npm install
+
+      - name: Prebuild de Expo para Android
         script: |
-          npx expo --version
-          npx expo prebuild --platform android --non-interactive
-      - name: Compilar APK (debug)
+          npx expo --version || npx --yes expo@latest --version
+          # Genera carpeta /android a partir de app.json/app.config.* 
+          npx expo prebuild --platform android --non-interactive --clean
+
+      - name: Dar permisos a Gradle wrapper
+        script: |
+          chmod +x android/gradlew
+
+      - name: Compilar APK Release
         script: |
           cd android
-          ./gradlew assembleDebug
-          mkdir -p ../build
-          cp app/build/outputs/apk/debug/app-debug.apk ../build/AgendaParaBienestar-debug.apk
+          ./gradlew assembleRelease
+
+      - name: Copiar APK a artefactos
+        script: |
+          mkdir -p "$CM_ARTIFACTS"
+          ls -la app/build/outputs/apk/release/ || true
+          cp app/build/outputs/apk/release/app-release.apk "$CM_ARTIFACTS/app-release.apk"
+
     artifacts:
-      - build/*.apk
+      - $CM_ARTIFACTS/app-release.apk
