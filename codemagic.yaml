@@ -16,13 +16,9 @@ workflows:
         - ~/.gradle/caches
         - ~/.gradle/wrapper
 
+    # Disparadores: lo dejamos vacío para hacer builds manuales
     triggering:
-      events:
-        - manual
-      branch_patterns:
-        - pattern: principal
-          include: true
-          source: true
+      events: []
 
     scripts:
       - name: Verificar entorno
@@ -43,7 +39,6 @@ workflows:
       - name: Prebuild de Expo para Android
         script: |
           npx expo --version || npx --yes expo@latest --version
-          # Genera carpeta /android a partir de app.json/app.config.* 
           npx expo prebuild --platform android --non-interactive --clean
 
       - name: Dar permisos a Gradle wrapper
