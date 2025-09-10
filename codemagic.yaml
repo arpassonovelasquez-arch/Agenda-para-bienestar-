@@ -1,59 +1,44 @@
 workflows:
   expo_android_local:
     name: Expo -> Android (APK local)
-    # Usa instancia compatible con el plan gratuito
-    instance_type: linux_x1
+    instance_type: linux_x2
     max_build_duration: 60
-
     environment:
       node: 18
       java: 17
       vars:
         ANDROID_HOME: /opt/android-sdk-linux
         CI: "1"
-
     cache:
       cache_paths:
         - ~/.npm
         - ~/.gradle/caches
         - ~/.gradle/wrapper
-
     scripts:
       - name: Verificar archivos y versión de Node
         script: |
-          echo "📂 Listado de raíz:"
+          echo "Listado de raíz:"
           ls -la
-          echo "🟢 Node:"
           node -v
           if [ ! -f package.json ]; then
-            echo "❌ FALTA package.json en la raíz del repo"; exit 1;
+            echo "FALTA package.json en la raíz del repo"; exit 1;
           fi
-
       - name: Instalar Expo CLI y dependencias
         script: |
-          npm ci || npm install --no-audit --no-fund
           npm install -g expo-cli
-
+          npm install --no-audit --no-fund
       - name: Asegurar dependencias Expo/RN (idempotente)
         script: |
-          npm i -S \
-            expo@50.0.7 \
-            react@18.2.0 \
-            react-native@0.73.4 \
-            expo-modules-autolinking@2.0.3 \
-            @expo/prebuild-config@6.0.1
-
+          npm install expo@50.0.7 react@18.2.0 react-native@0.73.4 expo-modules-autolinking@2.0.3 @expo/prebuild-config@6.0.1 --save
       - name: Prebuild de Expo a Android
         script: |
           npx expo --version
           npx expo prebuild --platform android --non-interactive
-
       - name: Compilar APK (debug)
         script: |
           cd android
           ./gradlew assembleDebug
           mkdir -p ../build
           cp app/build/outputs/apk/debug/app-debug.apk ../build/AgendaParaBienestar-debug.apk
-
     artifacts:
       - build/*.apk
