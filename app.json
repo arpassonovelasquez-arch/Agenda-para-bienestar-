@@ -4,13 +4,20 @@
     "slug": "agenda-para-bienestar",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "scheme": "agenda",
     "userInterfaceStyle": "automatic",
+
+    "icon": "./assets/icon.png",
+
     "android": {
       "package": "com.agenda.bienestar",
-      "permissions": []
+      "permissions": [],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
     },
+
     "updates": { "fallbackToCacheTimeout": 0 },
     "assetBundlePatterns": ["**/*"]
   }
