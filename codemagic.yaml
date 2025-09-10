@@ -14,11 +14,23 @@ workflows:
         - ~/.gradle/caches
         - ~/.gradle/wrapper
     scripts:
+      - name: Verificar archivos y versión de Node
+        script: |
+          echo "Listado de raíz:"
+          ls -la
+          node -v
+          if [ ! -f package.json ]; then
+            echo "FALTA package.json en la raíz del repo"; exit 1;
+          fi
       - name: Instalar dependencias
         script: |
-          npm ci || npm install
-      - name: Prebuild de Expo a proyecto nativo Android
+          npm install --no-audit --no-fund
+      - name: Asegurar dependencias Expo/RN (idempotente)
         script: |
+          npm install expo@~51.0.0 react@18.2.0 react-native@0.74.5 expo-status-bar@~1.12.1 --save
+      - name: Prebuild de Expo a Android
+        script: |
+          npx expo --version
           npx expo prebuild --platform android --non-interactive
       - name: Compilar APK (debug)
         script: |
