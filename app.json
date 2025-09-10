@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "Agenda para Bienestar",
+    "slug": "agenda-para-bienestar",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "agenda",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "package": "com.agenda.bienestar",
+      "permissions": []
+    },
+    "updates": { "fallbackToCacheTimeout": 0 },
+    "assetBundlePatterns": ["**/*"]
+  }
+}
