@@ -1,6 +1,7 @@
 workflows:
   expo_android_local:
-    name: "Expo -> Android (APK local)"
+    name: Expo -> Android (APK local)
+    # Instancia compatible con el plan gratuito
     instance_type: linux_x2
     max_build_duration: 60
 
@@ -8,7 +9,9 @@ workflows:
       node: 18
       java: 17
       vars:
+        ANDROID_HOME: /opt/android-sdk-linux
         CI: "1"
+        EXPO_NO_TELEMETRY: "1"
 
     cache:
       cache_paths:
@@ -17,34 +20,39 @@ workflows:
         - ~/.gradle/wrapper
 
     scripts:
-      - name: Verificar archivos y versiones
+      - name: Verificar proyecto
         script: |
-          echo "Listado raíz del repo:"
+          echo "Listado de raíz:"
           ls -la
-          echo "Node:"
+          echo "Versión de Node:"
           node -v
-          echo "Java:"
-          java -version
           if [ ! -f package.json ]; then
-            echo "FALTA package.json en la raíz del repo"; exit 1
+            echo "FALTA package.json en la raíz del repositorio"; exit 1;
           fi
 
-      - name: Instalar Expo CLI y dependencias
+      - name: Instalar dependencias NPM
         script: |
-          npm ci || npm install --no-audit --no-fund
-          npm install -g expo-cli
+          # Usa ci si existe package-lock; si no, fallback a install
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
 
-      - name: Prebuild de Expo a Android
+      - name: Prebuild de Expo a Android (no interactivo)
         script: |
           npx expo --version
+          # Genera las carpetas android/ y enlaza módulos nativos
           npx expo prebuild --platform android --non-interactive
 
       - name: Compilar APK (debug)
         script: |
           cd android
+          ./gradlew --version
           ./gradlew assembleDebug
           mkdir -p ../build
           cp app/build/outputs/apk/debug/app-debug.apk ../build/AgendaParaBienestar-debug.apk
+          echo "APK generado en build/AgendaParaBienestar-debug.apk"
 
     artifacts:
       - build/*.apk
