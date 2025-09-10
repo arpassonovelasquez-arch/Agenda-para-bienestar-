@@ -1,60 +1,45 @@
 workflows:
-  expo_android_apk:
-    name: Build Expo → Android (APK local)
-    instance_type: linux
+  expo_android_local:
+    name: "Expo → Android (APK local)"
     max_build_duration: 60
-
+    instance_type: linux_x2   # GRATIS. No uses mac_mini_m1
     environment:
+      flutter: none
       node: 18
       java: 17
+      xcode: none
       vars:
-        ANDROID_HOME: /opt/android-sdk-linux
-
+        CI: "1"
     cache:
       cache_paths:
         - ~/.npm
         - ~/.gradle/caches
         - ~/.gradle/wrapper
 
-    # Disparadores: lo dejamos vacío para hacer builds manuales
-    triggering:
-      events: []
-
     scripts:
-      - name: Verificar entorno
+      - name: Verificar archivos y Node
         script: |
-          echo "Node: $(node -v)"
-          echo "Java:"
-          java -version
-          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "Contenido de la raíz:"
+          ls -la
+          node -v
+          test -f package.json || (echo "FALTA package.json en la raíz" && exit 1)
 
-      - name: Aceptar licencias de Android SDK
-        script: |
-          yes | "$ANDROID_HOME/tools/bin/sdkmanager" --licenses || true
-
-      - name: Instalar dependencias
+      - name: Instalar Expo CLI y dependencias
         script: |
           npm ci || npm install
+          npm install -g expo-cli
 
-      - name: Prebuild de Expo para Android
+      - name: Prebuild de Expo a Android
         script: |
-          npx expo --version || npx --yes expo@latest --version
-          npx expo prebuild --platform android --non-interactive --clean
+          npx expo --version
+          npx expo prebuild --platform android --non-interactive
 
-      - name: Dar permisos a Gradle wrapper
-        script: |
-          chmod +x android/gradlew
-
-      - name: Compilar APK Release
+      - name: Compilar APK (debug)
         script: |
           cd android
-          ./gradlew assembleRelease
-
-      - name: Copiar APK a artefactos
-        script: |
-          mkdir -p "$CM_ARTIFACTS"
-          ls -la app/build/outputs/apk/release/ || true
-          cp app/build/outputs/apk/release/app-release.apk "$CM_ARTIFACTS/app-release.apk"
+          ./gradlew assembleDebug
+          mkdir -p ../build
+          cp app/build/outputs/apk/debug/app-debug.apk ../build/AgendaParaBienestar-debug.apk
 
     artifacts:
-      - $CM_ARTIFACTS/app-release.apk
+      - build/*.apk
