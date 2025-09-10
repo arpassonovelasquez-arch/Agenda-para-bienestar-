@@ -29,7 +29,3 @@ workflows:
           npx eas build -p android --profile preview --non-interactive
     artifacts:
       - ./build/**/*
-    publishing:
-      email:
-        recipients:
-          - $CM_EMAIL
