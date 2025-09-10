@@ -1,15 +1,13 @@
 workflows:
   expo_android_local:
-    name: Expo -> Android (APK local)
-    # En el plan gratuito usa Linux para Android
-    instance_type: linux
+    name: "Expo -> Android (APK local)"
+    instance_type: linux_x2
     max_build_duration: 60
 
     environment:
       node: 18
       java: 17
       vars:
-        ANDROID_HOME: /opt/android-sdk-linux
         CI: "1"
 
     cache:
@@ -19,42 +17,25 @@ workflows:
         - ~/.gradle/wrapper
 
     scripts:
-      - name: Verificar archivos y versión de Node
+      - name: Verificar archivos y versiones
         script: |
-          echo "Listado de raíz:"
+          echo "Listado raíz del repo:"
           ls -la
+          echo "Node:"
           node -v
+          echo "Java:"
+          java -version
           if [ ! -f package.json ]; then
-            echo "FALTA package.json en la raíz del repo"; exit 1;
+            echo "FALTA package.json en la raíz del repo"; exit 1
           fi
 
       - name: Instalar Expo CLI y dependencias
         script: |
+          npm ci || npm install --no-audit --no-fund
           npm install -g expo-cli
-          npm install --no-audit --no-fund
-
-      - name: Asegurar dependencias Expo/RN (idempotente)
-        script: |
-          npm install expo@50.0.7 react@18.2.0 react-native@0.73.4 expo-modules-autolinking@2.0.3 @expo/prebuild-config@6.0.1 --save
-
-      - name: Garantizar icono PNG para Expo
-        script: |
-          mkdir -p assets
-          if [ ! -f assets/icon.png ]; then
-            python3 -m pip install --user pillow
-            python3 - << 'PY'
-from PIL import Image, ImageDraw
-im = Image.new('RGBA', (512, 512), (255, 255, 255, 255))
-d = ImageDraw.Draw(im)
-d.ellipse((96, 96, 416, 416), fill=(52, 120, 246, 255))
-im.save('assets/icon.png')
-PY
-          fi
-          echo "Icono presente en assets/icon.png"
 
       - name: Prebuild de Expo a Android
         script: |
-          rm -rf android
           npx expo --version
           npx expo prebuild --platform android --non-interactive
 
