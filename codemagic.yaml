@@ -1,15 +1,16 @@
 workflows:
   expo_android_local:
-    name: "Expo → Android (APK local)"
+    name: Expo -> Android (APK local)
+    instance_type: linux_x2
     max_build_duration: 60
-    instance_type: linux_x2   # GRATIS. No uses mac_mini_m1
+
     environment:
-      flutter: none
       node: 18
       java: 17
-      xcode: none
       vars:
         CI: "1"
+        EXPO_NO_TELEMETRY: "1"
+
     cache:
       cache_paths:
         - ~/.npm
@@ -17,22 +18,36 @@ workflows:
         - ~/.gradle/wrapper
 
     scripts:
-      - name: Verificar archivos y Node
+      - name: Verificar archivos y versión de Node
         script: |
-          echo "Contenido de la raíz:"
+          echo "Listado de raíz:"
           ls -la
+          echo "Node:"
           node -v
-          test -f package.json || (echo "FALTA package.json en la raíz" && exit 1)
+          if [ ! -f package.json ]; then
+            echo "FALTA package.json en la raíz del repo"; exit 1;
+          fi
 
-      - name: Instalar Expo CLI y dependencias
+      - name: Limpiar instalación previa (idempotente)
         script: |
-          npm ci || npm install
-          npm install -g expo-cli
+          rm -rf node_modules android build || true
+          rm -f yarn.lock # usamos npm
+          npm cache verify
 
-      - name: Prebuild de Expo a Android
+      - name: Instalar dependencias del proyecto
+        script: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      # IMPORTANTE: no instalar manualmente expo-modules-autolinking NI @expo/prebuild-config
+
+      - name: Prebuild de Expo a Android (limpio)
         script: |
           npx expo --version
-          npx expo prebuild --platform android --non-interactive
+          npx expo prebuild --platform android --non-interactive --clean
 
       - name: Compilar APK (debug)
         script: |
