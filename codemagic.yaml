@@ -8,6 +8,7 @@ workflows:
       java: 17
       vars:
         ANDROID_HOME: /opt/android-sdk-linux
+        CI: "1"
     cache:
       cache_paths:
         - ~/.npm
@@ -27,7 +28,7 @@ workflows:
           npm install --no-audit --no-fund
       - name: Asegurar dependencias Expo/RN (idempotente)
         script: |
-          npm install expo@~51.0.0 react@18.2.0 react-native@0.74.5 expo-status-bar@~1.12.1 --save
+          npm install expo@50.0.7 react@18.2.0 react-native@0.73.4 expo-modules-autolinking@2.0.3 @expo/prebuild-config@6.0.1 --save
       - name: Prebuild de Expo a Android
         script: |
           npx expo --version
