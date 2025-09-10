@@ -1,50 +1,35 @@
 workflows:
-  android_debug_apk:
-    name: Build React Native Android (Debug APK)
+  expo_eas_android:
+    name: Build Expo (EAS) Android
     instance_type: linux
     max_build_duration: 60
     environment:
       node: 18
-      java: 17
       vars:
-        ANDROID_HOME: /opt/android-sdk-linux
-        GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs="-Xmx2g -Dfile.encoding=UTF-8"
+        EAS_NO_VCS: "1"
     cache:
       cache_paths:
-        - ~/.gradle/caches
-        - ~/.gradle/wrapper
         - ~/.npm
-        - ~/.cache/yarn
-
+        - ~/.cache/eas
     scripts:
-      - name: Instalar dependencias Node
+      - name: Instalar dependencias
         script: |
           npm ci || npm install
-
-      - name: Aceptar licencias del SDK de Android
+      - name: Ver versión de Expo y EAS
         script: |
-          yes | sdkmanager --licenses || true
-
-      - name: Verificar proyecto y preparar gradlew
+          npx expo --version
+          npx eas --version
+      - name: Login opcional a Expo (usa variables si las configuras)
         script: |
-          ls -la
-          test -d android || { echo "No existe la carpeta android/ en la raíz del repo"; exit 1; }
-          cd android
-          test -f gradlew || { echo "No se encontró gradlew"; ls -la; exit 1; }
-          # Normalizar finales de línea por si se subió con CRLF
-          sed -i 's/\r$//' gradlew
-          chmod +x gradlew
-          ./gradlew --version
-
-      - name: Preparar Gradle (listar tareas)
+          if [ -n "$EXPO_TOKEN" ]; then
+            npx expo whoami || true
+          fi
+      - name: Compilar Android (preview)
         script: |
-          cd android
-          ./gradlew tasks
-
-      - name: Compilar APK Debug (instalable)
-        script: |
-          cd android
-          ./gradlew assembleDebug
-
+          npx eas build -p android --profile preview --non-interactive
     artifacts:
-      - android/app/build/outputs/apk/debug/app-debug.apk
+      - ./build/**/*
+    publishing:
+      email:
+        recipients:
+          - $CM_EMAIL
