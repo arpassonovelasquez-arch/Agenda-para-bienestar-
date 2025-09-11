@@ -15,26 +15,41 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          # Si tienes package-lock.json en el repo, puedes habilitar cache:
           cache: 'npm'
-          cache-dependency-path: package-lock.json
+
+      - name: Set up Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Install deps
-        run: npm ci
+        shell: bash
+        run: |
+          if [ -f yarn.lock ]; then
+            corepack enable
+            echo "Using yarn with frozen lockfile"
+            yarn install --frozen-lockfile
+          elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            echo "Using npm ci (lockfile present)"
+            npm ci --no-audit --no-fund
+          else
+            echo "No lockfile found -> using npm install"
+            npm install --no-audit --no-fund
+          fi
 
       - name: Install Expo CLI
-        run: npm install -g expo-cli
+        run: npm i -g expo-cli
 
       - name: Expo prebuild (Android)
         run: npx expo prebuild --platform android --non-interactive
 
       - name: Build APK (debug)
-        run: |
-          cd android
-          ./gradlew assembleDebug
+        working-directory: android
+        run: ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgendaParaBienestar-debug.apk
+          name: app-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
