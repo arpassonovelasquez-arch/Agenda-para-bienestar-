@@ -14,37 +14,36 @@ jobs:
       - name: Use Node.js 18
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: 18
           cache: 'npm'
-
-      - name: Install deps
-        run: |
-          npm install --no-audit --no-fund
 
       - name: Set up Java 17 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
+
+      # ⚠️ SIN package-lock.json usamos "npm install", no "npm ci"
+      - name: Install deps
+        run: |
+          npm install --legacy-peer-deps
 
       - name: Install Expo CLI
-        run: npm install -g expo-cli
+        run: npm i -g expo@latest
 
       - name: Expo prebuild (Android)
         run: npx expo prebuild --platform android --non-interactive
 
-      - name: Build APK (debug)
-        working-directory: android
-        run: ./gradlew assembleDebug
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
 
-      - name: Collect APK
+      - name: Build APK (debug)
         run: |
-          mkdir -p build
-          cp android/app/build/outputs/apk/debug/app-debug.apk build/AgendaParaBienestar-debug.apk
+          cd android
+          ./gradlew assembleDebug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgendaParaBienestar-debug
-          path: build/AgendaParaBienestar-debug.apk
+          name: app-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
