@@ -1,60 +1,40 @@
 name: Build Android APK (Expo)
 
 on:
-  workflow_dispatch:      # permite lanzarlo manualmente
-  push:
-    branches: [ main ]    # o "principal" si tu rama se llama así
+  workflow_dispatch:
 
 jobs:
-  build-android:
+  build:
     runs-on: ubuntu-latest
-    env:
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout del repositorio
+        uses: actions/checkout@v3
 
-      - name: Setup Node 18
-        uses: actions/setup-node@v4
+      - name: Configurar Node.js
+        uses: actions/setup-node@v3
         with:
           node-version: 18
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
+      - name: Instalar dependencias
+        run: npm install
 
-      - name: Cache npm
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: ${{ runner.os }}-npm-
+      - name: Instalar Expo CLI
+        run: npm install -g expo-cli
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: ${{ runner.os }}-gradle-
+      - name: Verificar Expo CLI
+        run: expo --version
 
-      - name: Install deps
-        run: |
-          npm ci || npm install
-
-      - name: Expo prebuild (Android)
+      - name: Prebuild para Android
         run: npx expo prebuild --platform android --non-interactive
 
-      - name: Build APK (debug)
-        working-directory: android
-        run: ./gradlew assembleDebug
+      - name: Generar APK en modo debug
+        run: |
+          cd android
+          ./gradlew assembleDebug
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - name: Subir APK como artefacto
+        uses: actions/upload-artifact@v3
         with:
-          name: AgendaParaBienestar-debug
+          name: AgendaParaBienestar-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
