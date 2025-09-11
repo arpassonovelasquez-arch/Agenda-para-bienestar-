@@ -14,32 +14,22 @@ jobs:
       - name: Use Node.js 18
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: '18'
           cache: 'npm'
+
+      - name: Install deps
+        run: |
+          npm install --no-audit --no-fund
 
       - name: Set up Java 17 (Temurin)
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: 'temurin'
           java-version: '17'
-
-      - name: Install deps
-        shell: bash
-        run: |
-          if [ -f yarn.lock ]; then
-            corepack enable
-            echo "Using yarn with frozen lockfile"
-            yarn install --frozen-lockfile
-          elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
-            echo "Using npm ci (lockfile present)"
-            npm ci --no-audit --no-fund
-          else
-            echo "No lockfile found -> using npm install"
-            npm install --no-audit --no-fund
-          fi
+          cache: 'gradle'
 
       - name: Install Expo CLI
-        run: npm i -g expo-cli
+        run: npm install -g expo-cli
 
       - name: Expo prebuild (Android)
         run: npx expo prebuild --platform android --non-interactive
@@ -48,8 +38,13 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug
 
+      - name: Collect APK
+        run: |
+          mkdir -p build
+          cp android/app/build/outputs/apk/debug/app-debug.apk build/AgendaParaBienestar-debug.apk
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: AgendaParaBienestar-debug
+          path: build/AgendaParaBienestar-debug.apk
