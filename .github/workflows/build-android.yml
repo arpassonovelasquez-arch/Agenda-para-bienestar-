@@ -31,7 +31,15 @@ jobs:
       - name: Install Expo CLI
         run: npm i -g expo@^50
 
-      # Genera la carpeta android/ desde un proyecto Expo (managed)
+      # Confirmar que los assets existen
+      - name: Verify assets exist
+        run: |
+          ls -la
+          ls -la assets || true
+          file assets/icon.png || true
+          file assets/splash.png || true
+
+      # Generar carpeta android/ desde Expo
       - name: Expo prebuild (Android)
         run: npx expo prebuild --platform android --clean --no-install
 
