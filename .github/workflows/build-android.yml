@@ -24,23 +24,40 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # Instalamos sin exigir package-lock.json
+      # (Opcional) Cache de NPM para acelerar builds siguientes
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
       - name: Install dependencies
         run: npm install
 
       - name: Install Expo CLI
         run: npm i -g expo@^50
 
-      # Confirmar que los assets existen
+      # ✅ Verificación estricta de assets
       - name: Verify assets exist
         run: |
+          echo "Listado de archivos en el repo:"
           ls -la
+          echo "Listado en ./assets:"
           ls -la assets || true
-          file assets/icon.png || true
-          file assets/splash.png || true
+          for f in assets/icon.png assets/splash.png assets/adaptive-icon.png; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Falta el archivo requerido: $f"
+              exit 1
+            fi
+            file "$f" || true
+          done
 
-      # Generar carpeta android/ desde Expo
+      # Genera android/ con Expo (no reinstala deps)
       - name: Expo prebuild (Android)
+        env:
+          CI: true
         run: npx expo prebuild --platform android --clean --no-install
 
       - name: Make gradlew executable
