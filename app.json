@@ -17,10 +17,16 @@
     "android": {
       "package": "com.agenda.bienestar",
       "permissions": [],
-      "icon": "./assets/icon.png"
+      "icon": "./assets/adaptive-icon.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
     },
 
-    "updates": { "fallbackToCacheTimeout": 0 },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
     "assetBundlePatterns": ["**/*"]
   }
 }
