@@ -1,0 +1,8 @@
+Agenda-para-bienestar-/
+ ├── assets/
+ │    ├── icon.png
+ │    ├── adaptive-icon.png
+ │    └── splash.png
+ ├── app.json
+ ├── package.json
+ └── ...
