@@ -1,9 +1,12 @@
-name: Build Android APK (Expo)
+name: Build & Release Android APK (Expo)
 
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
+
+permissions:
+  contents: write   # necesario para crear el Release
 
 jobs:
   build:
@@ -24,37 +27,23 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # (Opcional) Cache de NPM para acelerar builds siguientes
-      - name: Cache node_modules
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-npm-
-
       - name: Install dependencies
         run: npm install
 
       - name: Install Expo CLI
         run: npm i -g expo@^50
 
-      # ✅ Verificación estricta de assets
+      # Verifica que los assets existan
       - name: Verify assets exist
         run: |
-          echo "Listado de archivos en el repo:"
-          ls -la
-          echo "Listado en ./assets:"
-          ls -la assets || true
           for f in assets/icon.png assets/splash.png assets/adaptive-icon.png; do
             if [ ! -f "$f" ]; then
-              echo "::error::Falta el archivo requerido: $f"
-              exit 1
+              echo "::error::Falta el archivo requerido: $f"; exit 1;
             fi
             file "$f" || true
           done
 
-      # Genera android/ con Expo (no reinstala deps)
+      # Genera /android con Expo
       - name: Expo prebuild (Android)
         env:
           CI: true
@@ -68,8 +57,29 @@ jobs:
           cd android
           ./gradlew assembleDebug
 
+      # Guarda también como Artifact por si quieres
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: Agenda-para-bienestar-debug
           path: android/app/build/outputs/apk/debug/*.apk
+
+      # === PUBLICACIÓN EN RELEASE ===
+      - name: Get APK path
+        id: apk
+        run: |
+          echo "apk_path=$(ls android/app/build/outputs/apk/debug/*.apk | head -n 1)" >> $GITHUB_OUTPUT
+          echo "tag=v${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
+          echo "release_name=Agenda-para-bienestar Debug #${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.apk.outputs.tag }}
+          name: ${{ steps.apk.outputs.release_name }}
+          draft: false
+          prerelease: true
+          files: |
+            ${{ steps.apk.outputs.apk_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
