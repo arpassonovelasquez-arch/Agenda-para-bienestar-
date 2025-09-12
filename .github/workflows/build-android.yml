@@ -2,6 +2,8 @@ name: Build Android APK (Expo)
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
 
 jobs:
   build:
@@ -14,25 +16,24 @@ jobs:
       - name: Use Node.js 18
         uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: 'npm'
+          node-version: '18'
 
-      - name: Set up Java 17 (Temurin)
+      - name: Use Java 17 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # ⚠️ SIN package-lock.json usamos "npm install", no "npm ci"
-      - name: Install deps
-        run: |
-          npm install --legacy-peer-deps
+      # Instalamos sin exigir package-lock.json
+      - name: Install dependencies
+        run: npm install
 
       - name: Install Expo CLI
-        run: npm i -g expo@latest
+        run: npm i -g expo@^50
 
+      # Genera la carpeta android/ desde un proyecto Expo (managed)
       - name: Expo prebuild (Android)
-        run: npx expo prebuild --platform android --non-interactive
+        run: npx expo prebuild --platform android --clean --no-install
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
@@ -45,5 +46,5 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: Agenda-para-bienestar-debug
+          path: android/app/build/outputs/apk/debug/*.apk
