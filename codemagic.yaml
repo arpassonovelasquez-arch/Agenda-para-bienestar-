@@ -1,55 +1,16 @@
 workflows:
-  expo_android_apk:
-    name: Build Expo → Android APK
-    instance_type: linux  # Forzamos plan gratuito
-    max_build_duration: 60
-
+  react_native_app:
+    name: Build React Native Android (APK)
     environment:
       node: 18
-      java: 11
-      npm: 8
-      vars:
-        ANDROID_HOME: /opt/android-sdk-linux
-
-    cache:
-      cache_paths:
-        - ~/.npm
-        - ~/.gradle/caches
-        - ~/.gradle/wrapper
-
-    triggering:
-      events: []  # Solo builds manuales, evita problemas con validación
-
+      java: 17
     scripts:
       - name: Instalar dependencias
         script: |
-          npm install --legacy-peer-deps
-
-      - name: Verificar Expo
+          npm install
+      - name: Compilar APK con EAS
         script: |
-          npx expo --version || npx --yes expo@latest --version
-
-      - name: Prebuild Android
-        script: |
-          npx expo prebuild --platform android --non-interactive --clean
-
-      - name: Aceptar licencias de Android SDK
-        script: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
-
-      - name: Dar permisos al Gradle Wrapper
-        script: |
-          chmod +x android/gradlew
-
-      - name: Compilar APK Release
-        script: |
-          cd android
-          ./gradlew assembleRelease
-
-      - name: Copiar APK generado a artefactos
-        script: |
-          mkdir -p "$CM_ARTIFACTS"
-          cp app/build/outputs/apk/release/app-release.apk "$CM_ARTIFACTS/app-release.apk"
-
+          npx expo install
+          npx eas build --platform android --profile preview --local --output ./app-release.apk
     artifacts:
-      - $CM_ARTIFACTS/app-release.apk
+      - app-release.apk
